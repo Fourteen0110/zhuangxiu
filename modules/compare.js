@@ -1,6 +1,6 @@
 /**
- * 购物比价模块
- * 多家商家比价、最低价标注、下单标记、差价计算
+ * 购物比价模块 v3
+ * 粘贴链接自动搜索，对照填入价格
  */
 const CompareModule = (() => {
   const STORE_KEY = 'compares';
@@ -14,34 +14,29 @@ const CompareModule = (() => {
     const room = document.getElementById('compare-room-filter')?.value || 'all';
     const status = document.getElementById('compare-status-filter')?.value || 'all';
     const search = (document.getElementById('compare-search')?.value || '').toLowerCase().trim();
-
     if (room !== 'all') items = items.filter(i => i.room === room);
     if (status === 'pending') items = items.filter(i => !i.ordered);
     if (status === 'ordered') items = items.filter(i => i.ordered);
     if (search) items = items.filter(i => i.name.toLowerCase().includes(search));
 
-    // 初始化房间下拉
     const roomSel = document.getElementById('compare-room-filter');
     if (roomSel && roomSel.options.length <= 1) {
       roomSel.innerHTML = '<option value="all">全部房间</option>' + ROOMS.map(r => `<option value="${r}">${r}</option>`).join('');
     }
-
     renderGrid(items);
   }
 
   function renderGrid(items) {
     const grid = document.getElementById('compare-grid');
     if (items.length === 0) {
-      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-secondary);">暂无比价记录，点击"添加比价"或"从家电家具导入"开始</div>`;
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-secondary);">暂无比价记录，点击"粘贴链接比价"开始</div>`;
       return;
     }
-
     grid.innerHTML = items.map(item => {
-      // 找最低价
       const shops = item.shops || [];
       const prices = shops.map(s => Number(s.price)).filter(p => p > 0);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
+      const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+      const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
       const saving = maxPrice > minPrice ? maxPrice - minPrice : 0;
 
       return `
@@ -55,14 +50,13 @@ const CompareModule = (() => {
           </div>
           <div class="compare-card-body">
             ${shops.map((s, i) => {
-              const isBest = Number(s.price) === minPrice && minPrice > 0;
+              const isBest = Number(s.price) === minPrice && minPrice > 0 && prices.length > 1;
               return `
                 <div class="compare-row ${isBest ? 'best-price' : ''}">
                   <span class="shop-name">${isBest ? '🏆 ' : ''}${s.name || '商家'+(i+1)}</span>
                   <span class="shop-price">${s.price ? App.formatMoney(s.price) : '-'}</span>
                   ${s.link ? `<a class="shop-link" href="${s.link}" target="_blank" onclick="event.stopPropagation()" title="打开链接">🔗</a>` : ''}
                   ${s.note ? `<span style="font-size:0.72rem;color:var(--text-secondary);">${s.note}</span>` : ''}
-                  <button class="btn btn-xs" style="background:#fff3e0;color:#e65100;padding:2px 8px;font-size:0.7rem;" data-action="search-price" data-name="${item.name}" data-shop-idx="${i}" data-shop-name="${(s.name||'').replace(/"/g,'&quot;')}" title="搜索此商品价格">🔍</button>
                 </div>
               `;
             }).join('')}
@@ -78,151 +72,249 @@ const CompareModule = (() => {
     }).join('');
   }
 
-  function showForm(item = null, prefill = null) {
-    const isEdit = !!item;
-    const shops = item?.shops || [{name:'',price:'',link:'',note:''},{name:'',price:'',link:'',note:''},{name:'',price:'',link:'',note:''}];
-
-    // 预填数据（来自粘贴识别）
-    if (prefill && !isEdit) {
-      if (prefill.name) shops[0].name = prefill.name;
-      if (prefill.price) shops[0].price = prefill.price;
-      if (prefill.link) shops[0].link = prefill.link;
-      if (prefill.shop) shops[0].name = prefill.shop;
-    }
-
-    let shopsHTML = shops.map((s, i) => `
-      <div class="form-row" style="margin-bottom:10px;">
-        <div class="form-group"><label>商家${i+1}名称</label><div style="display:flex;gap:6px;"><input type="text" id="cf-shop-name-${i}" value="${s.name||''}" placeholder="淘宝/京东/线下店" style="flex:1;"><button type="button" class="btn btn-xs" style="background:#fff3e0;color:#e65100;white-space:nowrap;" data-action="search-from-form" data-idx="${i}">🔍 搜价</button><button type="button" class="btn btn-xs" style="background:#e8f5e9;color:#2e7d32;white-space:nowrap;" data-action="paste-to-shop" data-idx="${i}">📋 粘贴</button></div></div>
-        <div class="form-group"><label>价格</label><input type="number" id="cf-shop-price-${i}" step="0.01" min="0" value="${s.price||''}" placeholder="0.00"></div>
+  // ========== 新增：粘贴链接比价（主要入口） ==========
+  function showPasteCompare() {
+    App.showModalLg('🛒 粘贴链接比价', `
+      <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;">
+        📋 <strong>操作步骤：</strong><br>
+        ① 去淘宝/京东App复制商品链接<br>
+        ② 粘贴到下方输入框<br>
+        ③ 点击搜索，在新窗口查看价格<br>
+        ④ 回来填入价格和名称保存
+      </p>
+      <div class="form-group">
+        <label>粘贴电商链接</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="cf-paste-link" placeholder="粘贴淘宝/京东/拼多多商品链接..." style="flex:1;">
+          <button class="btn btn-primary" id="cf-search-link" style="white-space:nowrap;">🔍 搜索</button>
+        </div>
       </div>
-      <div class="form-row" style="margin-bottom:10px;">
-        <div class="form-group"><label>链接</label><input type="url" id="cf-shop-link-${i}" value="${s.link||''}" placeholder="https://..."></div>
-        <div class="form-group"><label>备注</label><input type="text" id="cf-shop-note-${i}" value="${s.note||''}" placeholder="包安装/免运费..."></div>
+      <div class="form-group">
+        <label>或粘贴商品标题（含价格更佳）</label>
+        <textarea id="cf-paste-text" rows="2" placeholder="从电商App复制商品标题粘贴到这里，如：&#10;海尔冰箱BCD-500 500升 变频 ¥3299"></textarea>
       </div>
-    `).join('');
-
-    App.showModalLg(isEdit?'编辑比价':'添加比价', `
-      <div class="paste-banner" id="paste-banner" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer;" title="点击粘贴从电商复制的商品信息">
-        <span style="font-size:1.3rem;">📋</span>
-        <span style="flex:1;font-size:0.85rem;font-weight:600;color:#2e7d32;">从电商App复制商品后，点击此处自动识别填充</span>
-        <span style="font-size:0.75rem;color:#666;">点击粘贴 →</span>
+      <div style="background:var(--bg);border-radius:8px;padding:12px;margin:12px 0;font-size:0.82rem;color:var(--text-secondary);" id="cf-paste-preview">
+        💡 粘贴后这里会显示识别结果
+      </div>
+      <h4 style="margin:14px 0 10px;font-size:0.9rem;">填写比价信息</h4>
+      <div class="form-row">
+        <div class="form-group"><label>商品名称 *</label><input type="text" id="cf-name" placeholder="如：海尔冰箱BCD-500"></div>
+        <div class="form-group"><label>房间</label><select id="cf-room">${ROOMS.map(r => `<option value="${r}">${r}</option>`).join('')}</select></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>物品名称 *</label><input type="text" id="cf-name" value="${prefill?.name || item?.name || ''}" placeholder="如：双人沙发"></div>
-        <div class="form-group"><label>房间</label><select id="cf-room">${ROOMS.map(r => `<option value="${r}" ${item?.room===r?'selected':''}>${r}</option>`).join('')}</select></div>
+        <div class="form-group"><label>平台/商家</label><input type="text" id="cf-shop0" placeholder="京东/淘宝/拼多多"></div>
+        <div class="form-group"><label>价格 (元)</label><input type="number" id="cf-price0" step="0.01" min="0" placeholder="0.00"></div>
       </div>
-      <h4 style="margin:14px 0 10px;font-size:0.9rem;">商家比价</h4>
-      ${shopsHTML}
+      <div class="form-group"><label>备注</label><input type="text" id="cf-note0" placeholder="包邮/免安装/赠品..."></div>
     `, `
       <button class="btn btn-outline" id="cf-cancel">取消</button>
-      <button class="btn btn-primary" id="cf-save">${isEdit?'保存修改':'添加比价'}</button>
+      <button class="btn btn-primary" id="cf-save">保存比价</button>
     `);
 
+    const linkInput = document.getElementById('cf-paste-link');
+    const textInput = document.getElementById('cf-paste-text');
+    const preview = document.getElementById('cf-paste-preview');
+
+    // 粘贴链接时自动识别
+    function tryParse() {
+      const link = linkInput.value.trim();
+      const text = textInput.value.trim();
+      const combined = [text, link].filter(Boolean).join(' ');
+
+      if (!combined) {
+        preview.innerHTML = '💡 粘贴后这里会显示识别结果';
+        return;
+      }
+
+      const parsed = parseText(combined);
+
+      // 自动填充表单
+      if (parsed.name && !document.getElementById('cf-name').value) {
+        document.getElementById('cf-name').value = parsed.name;
+      }
+      if (parsed.shop && !document.getElementById('cf-shop0').value) {
+        document.getElementById('cf-shop0').value = parsed.shop;
+      }
+      if (parsed.price && !document.getElementById('cf-price0').value) {
+        document.getElementById('cf-price0').value = parsed.price;
+      }
+
+      preview.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div>🔗 链接：${parsed.link ? '<span style="color:var(--success);">已识别</span>' : '<span style="color:#ccc;">未识别</span>'}</div>
+          <div>📦 名称：${parsed.name ? '<strong>'+parsed.name+'</strong>' : '<span style="color:#ccc;">未识别，请手动输入</span>'}</div>
+          <div>💰 价格：${parsed.price ? '<strong style="color:var(--danger);">¥'+parsed.price+'</strong>' : '<span style="color:#ccc;">未识别</span>'}</div>
+          <div>🏪 平台：${parsed.shop ? '<strong>'+parsed.shop+'</strong>' : '<span style="color:#ccc;">未识别</span>'}</div>
+        </div>
+      `;
+    }
+
+    linkInput.addEventListener('input', tryParse);
+    textInput.addEventListener('input', tryParse);
+
+    // 搜索按钮
+    document.getElementById('cf-search-link').addEventListener('click', () => {
+      const link = linkInput.value.trim();
+      const name = document.getElementById('cf-name').value.trim();
+      const keyword = name || (textInput.value.trim().slice(0, 30));
+
+      if (link && link.startsWith('http')) {
+        window.open(link, '_blank', 'noopener');
+        App.showToast('已在浏览器打开商品链接，查看价格后回来填入', 'success');
+      } else if (keyword) {
+        const encoded = encodeURIComponent(keyword);
+        const urls = [
+          { name:'京东', url:`https://search.jd.com/Search?keyword=${encoded}&enc=utf-8` },
+          { name:'淘宝', url:`https://s.taobao.com/search?q=${encoded}` },
+        ];
+        App.showModal('选择搜索平台', `
+          <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;">搜索关键词：<strong>${keyword}</strong></p>
+          ${urls.map(u => `<button class="btn btn-outline" style="width:100%;margin-bottom:8px;justify-content:flex-start;" onclick="window.open('${u.url}','_blank','noopener')">🔍 ${u.name} 搜索</button>`).join('')}
+        `, `<button class="btn btn-outline" id="cf-sclose">关闭</button>`);
+        document.getElementById('cf-sclose').addEventListener('click', App.hideModal);
+      } else {
+        App.showToast('请先粘贴链接或输入商品名称', 'error');
+      }
+    });
+
+    // 取消
     document.getElementById('cf-cancel').addEventListener('click', App.hideModalLg);
 
-    // ========== 智能粘贴：识别整条商品信息 ==========
-    document.getElementById('paste-banner').addEventListener('click', async () => {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (!text || text.length < 3) return App.showToast('剪切板内容太短，请先从电商App复制商品信息', 'error');
-        const parsed = parseClipboard(text);
-        if (!parsed.name && !parsed.price) return App.showToast('未识别到商品信息，请复制包含名称和价格的文本', 'error');
-
-        // 填充名称
-        if (parsed.name && !document.getElementById('cf-name').value) {
-          document.getElementById('cf-name').value = parsed.name;
-        }
-        // 填充到第一个空商家位
-        for (let i = 0; i < 3; i++) {
-          const nameEl = document.getElementById(`cf-shop-name-${i}`);
-          const priceEl = document.getElementById(`cf-shop-price-${i}`);
-          const linkEl = document.getElementById(`cf-shop-link-${i}`);
-          if (!nameEl || !priceEl) continue;
-          // 找空位或已有同名商家
-          if (!nameEl.value || nameEl.value === parsed.shop) {
-            if (!nameEl.value && parsed.shop) nameEl.value = parsed.shop;
-            if (!priceEl.value && parsed.price) priceEl.value = parsed.price;
-            if (!linkEl.value && parsed.link) linkEl.value = parsed.link;
-            break;
-          }
-        }
-
-        const parts = [];
-        if (parsed.name) parts.push(`名称: ${parsed.name}`);
-        if (parsed.price) parts.push(`价格: ¥${parsed.price}`);
-        if (parsed.shop) parts.push(`平台: ${parsed.shop}`);
-        if (parsed.link) parts.push(`链接: ✓`);
-        App.showToast(`已识别: ${parts.join(' | ')}`, 'success');
-      } catch (err) {
-        App.showToast('无法读取剪切板，请手动粘贴或检查浏览器权限', 'error');
-      }
-    });
-
-    // 单个商家粘贴按钮
-    document.getElementById('modal-lg-body').addEventListener('click', async (e) => {
-      const pasteBtn = e.target.closest('[data-action="paste-to-shop"]');
-      if (pasteBtn) {
-        e.preventDefault();
-        const idx = parseInt(pasteBtn.dataset.idx);
-        try {
-          const text = await navigator.clipboard.readText();
-          if (!text || text.length < 3) return App.showToast('剪切板内容太短', 'error');
-          const parsed = parseClipboard(text);
-          if (!parsed.price && !parsed.name) return App.showToast('未识别到价格或名称', 'error');
-          if (parsed.name) document.getElementById(`cf-shop-name-${idx}`).value = parsed.name;
-          if (parsed.price) document.getElementById(`cf-shop-price-${idx}`).value = parsed.price;
-          if (parsed.link) document.getElementById(`cf-shop-link-${idx}`).value = parsed.link;
-          if (parsed.shop && !document.getElementById(`cf-shop-name-${idx}`).value) {
-            document.getElementById(`cf-shop-name-${idx}`).value = parsed.shop;
-          }
-          App.showToast(`已粘贴: ${parsed.price ? '¥'+parsed.price : ''} ${parsed.name||''}`, 'success');
-        } catch (err) {
-          App.showToast('无法读取剪切板，请检查浏览器权限', 'error');
-        }
-      }
-    });
-
-    // 表单中搜价按钮
-    document.getElementById('modal-lg-body').addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-action="search-from-form"]');
-      if (!btn) return;
-      const idx = parseInt(btn.dataset.idx);
-      const itemName = document.getElementById('cf-name').value.trim();
-      const shopName = document.getElementById(`cf-shop-name-${idx}`).value.trim();
-      if (!itemName) return App.showToast('请先输入物品名称', 'error');
-      searchPriceOnline(itemName, shopName);
-    });
-
+    // 保存
     document.getElementById('cf-save').addEventListener('click', () => {
       const name = document.getElementById('cf-name').value.trim();
-      if (!name) return App.showToast('请输入物品名称', 'error');
-      const room = document.getElementById('cf-room').value;
-      const newShops = [0,1,2].map(i => ({
-        name: document.getElementById(`cf-shop-name-${i}`).value.trim(),
-        price: parseFloat(document.getElementById(`cf-shop-price-${i}`).value) || null,
-        link: document.getElementById(`cf-shop-link-${i}`).value.trim(),
-        note: document.getElementById(`cf-shop-note-${i}`).value.trim(),
-      })).filter(s => s.name || s.price);
+      if (!name) return App.showToast('请输入商品名称', 'error');
+      const shop = document.getElementById('cf-shop0').value.trim();
+      const price = parseFloat(document.getElementById('cf-price0').value) || null;
+      const link = linkInput.value.trim();
+      const note = document.getElementById('cf-note0').value.trim();
 
       const items = getItems();
-      const entry = { id: item?.id || App.uid(), name, room, shops: newShops, ordered: item?.ordered || false };
-      if (isEdit) {
-        const idx = items.findIndex(i => i.id === item.id);
-        if (idx >= 0) items[idx] = entry;
-      } else { items.push(entry); }
+      items.push({
+        id: App.uid(),
+        name,
+        room: document.getElementById('cf-room').value,
+        shops: [{ name: shop || '未指定', price, link, note }],
+        ordered: false
+      });
       saveItems(items);
       App.hideModalLg();
-      App.showToast(isEdit?'比价已更新':'比价已添加', 'success');
+      App.showToast('比价已保存', 'success');
       render();
     });
   }
 
+  // ========== 解析剪切板/粘贴文本 ==========
+  function parseText(text) {
+    const result = { name: '', price: null, shop: '', link: '' };
+
+    // 提取链接
+    const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
+    if (urlMatch) result.link = urlMatch[1];
+
+    // 提取价格
+    const pricePatterns = [
+      /¥\s*(\d+\.?\d{0,2})/,
+      /￥\s*(\d+\.?\d{0,2})/,
+      /(\d+\.?\d{0,2})\s*元/,
+      /RMB\s*(\d+\.?\d{0,2})/i,
+      /到手价[：:]\s*(\d+\.?\d{0,2})/,
+      /价格[：:]\s*(\d+\.?\d{0,2})/,
+      /(\d{3,5}\.?\d{0,2})/,
+    ];
+    for (const p of pricePatterns) {
+      const m = text.match(p);
+      if (m) { result.price = parseFloat(m[1]); break; }
+    }
+
+    // 识别平台
+    if (text.includes('京东') || text.includes('jd.com') || (result.link && result.link.includes('jd.com'))) result.shop = '京东';
+    else if (text.includes('淘宝') || text.includes('taobao.com') || (result.link && result.link.includes('taobao.com'))) result.shop = '淘宝';
+    else if (text.includes('拼多多') || text.includes('yangkeduo') || (result.link && result.link.includes('yangkeduo'))) result.shop = '拼多多';
+    else if (text.includes('天猫') || text.includes('tmall.com') || (result.link && result.link.includes('tmall.com'))) result.shop = '天猫';
+    else if (text.includes('苏宁') || text.includes('suning.com')) result.shop = '苏宁';
+    else if (text.includes('小米') || text.includes('mi.com')) result.shop = '小米商城';
+
+    // 提取商品名称
+    let clean = text
+      .replace(/https?:\/\/[^\s]+/g, '')
+      .replace(/¥\s*\d+\.?\d{0,2}/g, '')
+      .replace(/￥\s*\d+\.?\d{0,2}/g, '')
+      .replace(/\d+\.?\d{0,2}\s*元/g, '')
+      .replace(/RMB\s*\d+\.?\d{0,2}/gi, '')
+      .replace(/价格[：:]\s*\d+\.?\d{0,2}/g, '')
+      .replace(/到手价[：:]\s*\d+\.?\d{0,2}/g, '')
+      .replace(/【.+?】/g, '')
+      .replace(/包邮|免运费|顺丰|正品|旗舰店|自营|官方|授权|专卖|品牌/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const fragments = clean.split(/[，,。\n\r【】]+/).filter(f => f.length > 3);
+    if (fragments.length > 0) {
+      result.name = fragments.reduce((a, b) => a.length >= b.length ? a : b, '');
+      if (result.name.length > 60) result.name = result.name.slice(0, 60);
+    } else if (clean.length > 3) {
+      result.name = clean.slice(0, 60);
+    }
+
+    return result;
+  }
+
+  // ========== 编辑已有比价 ==========
+  function showEditForm(item) {
+    const shops = item.shops && item.shops.length > 0 ? item.shops : [{name:'',price:null,link:'',note:''}];
+
+    App.showModalLg('编辑比价', `
+      <div class="form-row">
+        <div class="form-group"><label>商品名称 *</label><input type="text" id="cf-ename" value="${item.name||''}"></div>
+        <div class="form-group"><label>房间</label><select id="cf-eroom">${ROOMS.map(r => `<option value="${r}" ${item.room===r?'selected':''}>${r}</option>`).join('')}</select></div>
+      </div>
+      ${shops.map((s, i) => `
+        <h4 style="margin:12px 0 8px;font-size:0.85rem;">商家 ${i+1}</h4>
+        <div class="form-row">
+          <div class="form-group"><label>平台/商家</label><input type="text" id="cf-eshop-${i}" value="${s.name||''}"></div>
+          <div class="form-group"><label>价格</label><input type="number" id="cf-eprice-${i}" step="0.01" value="${s.price||''}"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>链接</label><input type="url" id="cf-elink-${i}" value="${s.link||''}"></div>
+          <div class="form-group"><label>备注</label><input type="text" id="cf-enote-${i}" value="${s.note||''}"></div>
+        </div>
+      `).join('')}
+    `, `
+      <button class="btn btn-outline" id="cf-ecancel">取消</button>
+      <button class="btn btn-primary" id="cf-esave">保存修改</button>
+    `);
+
+    document.getElementById('cf-ecancel').addEventListener('click', App.hideModalLg);
+    document.getElementById('cf-esave').addEventListener('click', () => {
+      const name = document.getElementById('cf-ename').value.trim();
+      if (!name) return App.showToast('请输入商品名称', 'error');
+      const newShops = shops.map((_, i) => ({
+        name: document.getElementById(`cf-eshop-${i}`).value.trim(),
+        price: parseFloat(document.getElementById(`cf-eprice-${i}`).value) || null,
+        link: document.getElementById(`cf-elink-${i}`).value.trim(),
+        note: document.getElementById(`cf-enote-${i}`).value.trim(),
+      })).filter(s => s.name || s.price);
+
+      const items = getItems();
+      const idx = items.findIndex(i => i.id === item.id);
+      if (idx >= 0) {
+        items[idx] = { ...items[idx], name, room: document.getElementById('cf-eroom').value, shops: newShops };
+      }
+      saveItems(items);
+      App.hideModalLg();
+      App.showToast('已更新', 'success');
+      render();
+    });
+  }
+
+  // ========== 从家具导入 ==========
   function importFromFurniture() {
     const furniture = App.getStore('furniture') || [];
     const compares = getItems();
     const existingNames = new Set(compares.map(c => c.name));
     const candidates = furniture.filter(f => !existingNames.has(f.name) && (f.status === '待购' || !f.status));
-    if (candidates.length === 0) return App.showToast('没有可导入的物品，所有物品已存在比价或已购买', 'error');
+    if (candidates.length === 0) return App.showToast('没有可导入的物品', 'error');
 
     let rows = candidates.map(f => `
       <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
@@ -240,12 +332,12 @@ const CompareModule = (() => {
       const items = getItems();
       candidates.forEach(f => {
         if (document.getElementById(`cf-import-${f.id}`).checked) {
-          items.push({ id: App.uid(), name: f.name, room: f.room, shops: [{name:'',price:f.price,link:f.link||'',note:''}], ordered: false });
+          items.push({ id: App.uid(), name: f.name, room: f.room, shops: [{name:'',price:f.price||null,link:f.link||'',note:''}], ordered: false });
         }
       });
       saveItems(items);
       App.hideModalLg();
-      App.showToast(`已导入`, 'success');
+      App.showToast('已导入', 'success');
       render();
     });
   }
@@ -257,132 +349,30 @@ const CompareModule = (() => {
   }
 
   async function deleteItem(id) {
-    const ok = await App.showConfirm('确定要删除这条比价记录吗？');
+    const ok = await App.showConfirm('确定删除这条比价记录吗？');
     if (!ok) return;
     saveItems(getItems().filter(i => i.id !== id));
     App.showToast('已删除', 'success'); render();
   }
 
-  // ========== 剪切板智能解析 ==========
-  function parseClipboard(text) {
-    const result = { name: '', price: null, shop: '', link: '' };
-
-    // 1. 提取价格：¥2999 / 2999元 / 2999.00 / RMB2999
-    const pricePatterns = [
-      /¥\s*(\d+\.?\d{0,2})/,
-      /￥\s*(\d+\.?\d{0,2})/,
-      /(\d+\.?\d{0,2})\s*元/,
-      /RMB\s*(\d+\.?\d{0,2})/i,
-      /价格[：:]\s*(\d+\.?\d{0,2})/,
-    ];
-    for (const p of pricePatterns) {
-      const m = text.match(p);
-      if (m) { result.price = parseFloat(m[1]); break; }
-    }
-
-    // 2. 提取链接
-    const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
-    if (urlMatch) result.link = urlMatch[1];
-
-    // 3. 识别平台
-    if (text.includes('京东') || text.includes('jd.com') || (result.link && result.link.includes('jd.com'))) result.shop = '京东';
-    else if (text.includes('淘宝') || text.includes('taobao.com') || (result.link && result.link.includes('taobao.com'))) result.shop = '淘宝';
-    else if (text.includes('拼多多') || text.includes('pinduoduo') || (result.link && result.link.includes('yangkeduo'))) result.shop = '拼多多';
-    else if (text.includes('天猫') || text.includes('tmall.com') || (result.link && result.link.includes('tmall.com'))) result.shop = '天猫';
-    else if (text.includes('苏宁') || text.includes('suning.com')) result.shop = '苏宁';
-    else if (text.includes('小米') || text.includes('mi.com')) result.shop = '小米商城';
-
-    // 4. 提取商品名称：去掉价格、链接、常见噪音后的最长的有意义文本
-    let nameText = text
-      .replace(/https?:\/\/[^\s]+/g, '')  // 去链接
-      .replace(/¥\s*\d+\.?\d{0,2}/g, '')  // 去价格
-      .replace(/￥\s*\d+\.?\d{0,2}/g, '')
-      .replace(/\d+\.?\d{0,2}\s*元/g, '')
-      .replace(/RMB\s*\d+\.?\d{0,2}/gi, '')
-      .replace(/价格[：:]\s*\d+\.?\d{0,2}/g, '')
-      .replace(/【.+?】/g, '')  // 去【】
-      .replace(/包邮|免运费|顺丰|正品|旗舰店|自营|官方|授权|专卖/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    // 取最长的片段作为名称（去掉明显不是名称的短片段）
-    const fragments = nameText.split(/[，,。\n\r]+/).filter(f => f.length > 3);
-    if (fragments.length > 0) {
-      result.name = fragments.reduce((a, b) => a.length >= b.length ? a : b, '');
-      // 截断过长的名称
-      if (result.name.length > 60) result.name = result.name.slice(0, 60);
-    } else if (nameText.length > 3) {
-      result.name = nameText.slice(0, 60);
-    }
-
-    return result;
-  }
-
-  // ========== 联网搜索比价 ==========
-  function searchPriceOnline(itemName, shopName) {
-    const keyword = encodeURIComponent(itemName);
-    const platforms = [
-      { name: '京东', icon: '🐶', color: '#e74c3c', url: `https://search.jd.com/Search?keyword=${keyword}&enc=utf-8` },
-      { name: '淘宝', icon: '🛒', color: '#f39c12', url: `https://s.taobao.com/search?q=${keyword}` },
-      { name: '拼多多', icon: '📱', color: '#e74c3c', url: `https://mobile.yangkeduo.com/search_result.html?search_key=${keyword}` },
-      { name: '什么值得买', icon: '💎', color: '#e74c3c', url: `https://search.smzdm.com/?c=home&s=${keyword}` },
-    ];
-
-    App.showModal(`🔍 搜索比价：${itemName}`, `
-      <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:14px;">选择一个平台，将在新窗口打开搜索结果。复制价格后回到此页面手动填入。</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        ${platforms.map(p => `
-          <button class="btn btn-outline search-platform-btn" data-url="${p.url}" style="justify-content:flex-start;padding:12px 16px;">
-            <span style="font-size:1.2rem;">${p.icon}</span>
-            <span>${p.name}</span>
-            <span style="margin-left:auto;font-size:0.7rem;color:var(--text-secondary);">搜索「${itemName.slice(0,8)}${itemName.length>8?'…':''}」</span>
-          </button>
-        `).join('')}
-      </div>
-      ${shopName ? `<p style="margin-top:12px;font-size:0.8rem;color:var(--text-secondary);">💡 当前商家：<strong>${shopName}</strong> — 可在对应平台搜索后比对价格</p>` : ''}
-    `, `
-      <button class="btn btn-outline" id="search-cancel">关闭</button>
-    `);
-
-    document.getElementById('search-cancel').addEventListener('click', App.hideModal);
-    document.querySelectorAll('.search-platform-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        window.open(btn.dataset.url, '_blank', 'noopener');
-      });
-    });
-  }
-
   function init() {
-    document.getElementById('btn-add-compare').addEventListener('click', () => showForm());
+    // 主按钮改为粘贴比价
+    document.getElementById('btn-add-compare').addEventListener('click', showPasteCompare);
     document.getElementById('btn-compare-from-furniture').addEventListener('click', importFromFurniture);
     document.getElementById('compare-room-filter').addEventListener('change', render);
     document.getElementById('compare-status-filter').addEventListener('change', render);
     document.getElementById('compare-search').addEventListener('input', render);
 
-    // 快速粘贴识别按钮
-    document.getElementById('btn-quick-paste-compare').addEventListener('click', async () => {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (!text || text.length < 3) return App.showToast('剪切板内容太短，请先从电商App复制商品信息', 'error');
-        const parsed = parseClipboard(text);
-        if (!parsed.name && !parsed.price) return App.showToast('未识别到商品信息，请复制包含名称和价格的文本', 'error');
-        // 打开添加表单并预填
-        showForm(null, parsed);
-      } catch (err) {
-        App.showToast('无法读取剪切板，请检查浏览器权限后重试', 'error');
-      }
-    });
+    // 快速粘贴按钮同样打开粘贴比价
+    document.getElementById('btn-quick-paste-compare').addEventListener('click', showPasteCompare);
 
     document.getElementById('compare-grid').addEventListener('click', e => {
       const btn = e.target.closest('button');
       if (!btn) return;
       const action = btn.dataset.action, id = btn.dataset.id;
-      if (action === 'edit-compare') { const item = getItems().find(i => i.id === id); if (item) showForm(item); }
+      if (action === 'edit-compare') { const item = getItems().find(i => i.id === id); if (item) showEditForm(item); }
       else if (action === 'order-compare') markOrdered(id);
       else if (action === 'delete-compare') deleteItem(id);
-      else if (action === 'search-price') {
-        searchPriceOnline(btn.dataset.name, btn.dataset.shopName);
-      }
     });
 
     render();
