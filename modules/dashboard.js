@@ -100,9 +100,17 @@ const DashboardModule = (() => {
 
         <!-- 存储用量 -->
         <div class="dashboard-card full">
-          <h3>💾 本地存储用量</h3>
+          <h3>💾 数据管理</h3>
           <div class="storage-bar"><div class="storage-bar-fill" style="width:${Math.min(storageUsed/50,100)}%;background:${storageUsed>40?'var(--danger)':storageUsed>25?'var(--warning)':'var(--success)'};"></div></div>
-          <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">已用 ${storageUsed} KB（浏览器限制约 5-10 MB）</div>
+          <div style="font-size:0.8rem;color:var(--text-secondary);margin:4px 0 12px;">已用 ${storageUsed} KB（浏览器限制约 5-10 MB）</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm btn-primary" id="btn-export-data">📥 导出全部数据</button>
+            <button class="btn btn-sm btn-outline" id="btn-import-data">📤 导入数据</button>
+            <input type="file" id="import-file-input" accept=".json" style="display:none;">
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px;">
+            💡 A电脑导出 → 发到B电脑 → B电脑导入，数据即同步
+          </div>
         </div>
       </div>
     `;
@@ -112,6 +120,73 @@ const DashboardModule = (() => {
     }
   }
 
-  function init() {}
+  function init() {
+    // 导出导入事件委托（dashboard 在首页，用事件委托绑定）
+    document.getElementById('dashboard-content').addEventListener('click', (e) => {
+      if (e.target.id === 'btn-export-data' || e.target.closest('#btn-export-data')) {
+        exportAllData();
+      }
+      if (e.target.id === 'btn-import-data' || e.target.closest('#btn-import-data')) {
+        document.getElementById('import-file-input').click();
+      }
+    });
+    document.getElementById('dashboard-content').addEventListener('change', (e) => {
+      if (e.target.id === 'import-file-input') {
+        importAllData(e.target.files[0]);
+      }
+    });
+  }
+
+  // 导出全部数据
+  function exportAllData() {
+    const STORAGE_KEY = 'reno_';
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith(STORAGE_KEY)) {
+        data[key] = JSON.parse(localStorage.getItem(key));
+      }
+    }
+    if (Object.keys(data).length === 0) {
+      App.showToast('没有数据可导出', 'error');
+      return;
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const now = new Date();
+    const filename = `装修数据备份_${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}.json`;
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    App.showToast(`已导出 ${filename}，发到另一台电脑导入即可`, 'success');
+  }
+
+  // 导入数据
+  function importAllData(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        const STORAGE_KEY = 'reno_';
+        let count = 0;
+        for (const [key, value] of Object.entries(data)) {
+          if (key.startsWith(STORAGE_KEY)) {
+            localStorage.setItem(key, JSON.stringify(value));
+            count++;
+          }
+        }
+        if (count === 0) {
+          App.showToast('文件中没有装修数据', 'error');
+        } else {
+          App.showToast(`已导入 ${count} 条数据，刷新页面生效`, 'success');
+          setTimeout(() => location.reload(), 1500);
+        }
+      } catch (err) {
+        App.showToast('文件格式错误，请选择正确的备份文件', 'error');
+      }
+    };
+    reader.readAsText(file);
+  }
   return { init, render };
 })();
