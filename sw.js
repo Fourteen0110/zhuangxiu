@@ -3,7 +3,7 @@
  * 策略：Cache First with Network Update（缓存优先，后台更新）
  * 确保首次加载不阻塞，二次访问秒开
  */
-const CACHE_NAME = 'reno-v3';
+const CACHE_NAME = 'reno-v4';
 
 // 安装：不预缓存，直接激活（避免安装失败导致卡死）
 self.addEventListener('install', () => {
