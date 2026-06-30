@@ -125,6 +125,16 @@
           <button class="btn btn-primary" id="btn-add-compare">📋 粘贴链接比价</button>
         </div>
       </div>
+      <!-- 一键全网比价搜索栏 -->
+      <div class="quick-compare-bar" id="quick-compare-bar">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="quick-compare-input" placeholder="输入电器型号，一键全网比价（如：BCD-500、KFR-35GW）" style="flex:1;min-width:200px;padding:12px 16px;border:2px solid var(--primary);border-radius:var(--radius-sm);font-size:0.95rem;">
+          <button class="btn btn-primary" id="btn-quick-compare" style="padding:12px 24px;font-size:0.95rem;">🔍 一键全网比价</button>
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:6px;">
+          💡 输入型号自动打开什么值得买（聚合全网价）+ 京东 + 淘宝，对照填入价格即可
+        </div>
+      </div>
       <div class="filter-bar">
         <select id="compare-room-filter" class="filter-select">
           <option value="all">全部房间</option>

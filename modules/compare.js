@@ -294,7 +294,54 @@ const CompareModule = (() => {
     render();
   }
 
-  // ========== 编辑商品名称和房间 ==========
+  // ========== 一键全网比价后，快速保存 ==========
+  function showPasteCompareWithModel(model) {
+    App.showModalLg('💾 保存比价结果', `
+      <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;">
+        已在浏览器打开各平台搜索「<strong>${model}</strong>」，对照价格填入下方保存
+      </p>
+      <div class="form-row">
+        <div class="form-group"><label>商品名称/型号 *</label><input type="text" id="cfm-name" value="${model}"></div>
+        <div class="form-group"><label>房间</label><select id="cfm-room">${ROOMS.map(r => `<option value="${r}">${r}</option>`).join('')}</select></div>
+      </div>
+      <p style="font-size:0.82rem;font-weight:600;margin:10px 0 6px;">商家① — 什么值得买/京东</p>
+      <div class="form-row">
+        <div class="form-group"><label>平台</label><input type="text" id="cfm-shop1" placeholder="京东/什么值得买"></div>
+        <div class="form-group"><label>价格</label><input type="number" id="cfm-price1" step="0.01" min="0" placeholder="0.00"></div>
+      </div>
+      <p style="font-size:0.82rem;font-weight:600;margin:10px 0 6px;">商家② — 淘宝</p>
+      <div class="form-row">
+        <div class="form-group"><label>平台</label><input type="text" id="cfm-shop2" placeholder="淘宝"></div>
+        <div class="form-group"><label>价格</label><input type="number" id="cfm-price2" step="0.01" min="0" placeholder="0.00"></div>
+      </div>
+      <p style="font-size:0.82rem;font-weight:600;margin:10px 0 6px;">商家③ — 其他</p>
+      <div class="form-row">
+        <div class="form-group"><label>平台</label><input type="text" id="cfm-shop3" placeholder="拼多多/线下店"></div>
+        <div class="form-group"><label>价格</label><input type="number" id="cfm-price3" step="0.01" min="0" placeholder="0.00"></div>
+      </div>
+    `, `
+      <button class="btn btn-outline" id="cfm-cancel">取消</button>
+      <button class="btn btn-primary" id="cfm-save">保存比价</button>
+    `);
+
+    document.getElementById('cfm-cancel').addEventListener('click', App.hideModalLg);
+    document.getElementById('cfm-save').addEventListener('click', () => {
+      const name = document.getElementById('cfm-name').value.trim();
+      if (!name) return App.showToast('请输入商品名称', 'error');
+      const shops = [
+        { name: document.getElementById('cfm-shop1').value.trim(), price: parseFloat(document.getElementById('cfm-price1').value) || null, link: '', note: '' },
+        { name: document.getElementById('cfm-shop2').value.trim(), price: parseFloat(document.getElementById('cfm-price2').value) || null, link: '', note: '' },
+        { name: document.getElementById('cfm-shop3').value.trim(), price: parseFloat(document.getElementById('cfm-price3').value) || null, link: '', note: '' },
+      ].filter(s => s.name && s.price);
+
+      const items = getItems();
+      items.push({ id: App.uid(), name, room: document.getElementById('cfm-room').value, shops, ordered: false });
+      saveItems(items);
+      App.hideModalLg();
+      App.showToast('比价已保存', 'success');
+      render();
+    });
+  }
   function showEditName(item) {
     App.showModal('编辑商品信息', `
       <div class="form-group"><label>商品名称</label><input type="text" id="en-name" value="${item.name||''}"></div>
@@ -400,6 +447,37 @@ const CompareModule = (() => {
       else if (action === 'edit-compare') { const item = getItems().find(i => i.id === id); if (item) showEditName(item); }
       else if (action === 'order-compare') markOrdered(id);
       else if (action === 'delete-compare') deleteItem(id);
+    });
+
+    // ========== 一键全网比价（输入型号自动搜索） ==========
+    document.getElementById('btn-quick-compare').addEventListener('click', () => {
+      const model = document.getElementById('quick-compare-input').value.trim();
+      if (!model) return App.showToast('请输入电器型号', 'error');
+
+      const encoded = encodeURIComponent(model);
+      // 同时打开什么值得买 + 京东 + 淘宝
+      const urls = [
+        `https://search.smzdm.com/?c=home&s=${encoded}&v=b`,
+        `https://search.jd.com/Search?keyword=${encoded}&enc=utf-8`,
+        `https://s.taobao.com/search?q=${encoded}`,
+      ];
+
+      // 一次性打开所有搜索页面
+      urls.forEach((url, i) => {
+        setTimeout(() => window.open(url, '_blank', 'noopener'), i * 300);
+      });
+
+      App.showToast('已打开什么值得买 + 京东 + 淘宝，对照价格回来填入', 'success');
+
+      // 自动弹出添加比价窗口，预填型号
+      setTimeout(() => {
+        showPasteCompareWithModel(model);
+      }, 500);
+    });
+
+    // 回车也能触发
+    document.getElementById('quick-compare-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('btn-quick-compare').click();
     });
 
     render();

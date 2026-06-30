@@ -352,3 +352,16 @@ body {
   background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow);
   padding: 16px 20px; margin-bottom: 16px;
 }
+
+/* ========== Quick Compare Bar ========== */
+.quick-compare-bar {
+  background: linear-gradient(135deg, #eef1ff, #e8f0fe);
+  border: 2px solid var(--primary);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 18px;
+}
+.quick-compare-bar input:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(79,110,247,0.15);
+}
