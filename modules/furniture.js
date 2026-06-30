@@ -135,20 +135,23 @@ const FurnitureModule = (() => {
 
   function getItems() {
     let items = App.getStore(STORE_KEY);
-    // 兼容旧数据：如果数据存在但不是数组，或元素缺少必要字段，重置
+    // 首次使用或数据异常，写入预设数据
     if (!items || !Array.isArray(items) || items.length === 0) {
-      App.setStore(STORE_KEY, DEFAULT_ITEMS);
-      return JSON.parse(JSON.stringify(DEFAULT_ITEMS));
-    }
-    // 检查第一个元素是否有新字段（status），没有则说明是旧数据，合并默认值
-    if (items[0] && items[0].status === undefined) {
-      items = items.map((item, i) => ({
-        ...DEFAULT_ITEMS[i] || {},
-        ...item,
-        status: item.status || '待购',
-      }));
+      items = JSON.parse(JSON.stringify(DEFAULT_ITEMS));
+      // 给每个条目生成唯一 ID
+      items.forEach((item, i) => {
+        if (!item.id) item.id = 'f' + i + '_' + Date.now().toString(36);
+      });
       App.setStore(STORE_KEY, items);
+      return items;
     }
+    // 兼容旧数据：补上缺失的 id 和 status
+    let needsSave = false;
+    items.forEach((item, i) => {
+      if (!item.id) { item.id = 'f' + i + '_' + Date.now().toString(36); needsSave = true; }
+      if (item.status === undefined) { item.status = '待购'; needsSave = true; }
+    });
+    if (needsSave) App.setStore(STORE_KEY, items);
     return items;
   }
 
