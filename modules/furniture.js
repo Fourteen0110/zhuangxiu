@@ -135,10 +135,19 @@ const FurnitureModule = (() => {
 
   function getItems() {
     let items = App.getStore(STORE_KEY);
+    // 兼容旧数据：如果数据存在但不是数组，或元素缺少必要字段，重置
     if (!items || !Array.isArray(items) || items.length === 0) {
-      // 首次使用，写入预设数据
       App.setStore(STORE_KEY, DEFAULT_ITEMS);
       return JSON.parse(JSON.stringify(DEFAULT_ITEMS));
+    }
+    // 检查第一个元素是否有新字段（status），没有则说明是旧数据，合并默认值
+    if (items[0] && items[0].status === undefined) {
+      items = items.map((item, i) => ({
+        ...DEFAULT_ITEMS[i] || {},
+        ...item,
+        status: item.status || '待购',
+      }));
+      App.setStore(STORE_KEY, items);
     }
     return items;
   }
@@ -170,8 +179,9 @@ const FurnitureModule = (() => {
 
   function renderTable(items) {
     const tbody = document.getElementById('furniture-tbody');
+    if (!tbody) return; // tab 未激活时不渲染
     if (items.length === 0) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="9">暂无物品记录，点击"添加物品"开始记录</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="10">暂无物品记录，点击"添加物品"开始记录</td></tr>`;
       return;
     }
 
@@ -203,6 +213,8 @@ const FurnitureModule = (() => {
   }
 
   function renderSummary(items) {
+    const el = document.getElementById('furniture-summary');
+    if (!el) return; // tab 未激活
     const totalPrice = items.reduce((s, i) => s + (Number(i.price) || 0) * (i.qty || 1), 0);
     const totalQty = items.reduce((s, i) => s + (i.qty || 1), 0);
 
@@ -217,7 +229,7 @@ const FurnitureModule = (() => {
     if (Object.keys(roomStats).length > 0) {
       html += `<span>按房间：${Object.entries(roomStats).map(([r, c]) => `${r} ${c}件`).join(' · ')}</span>`;
     }
-    document.getElementById('furniture-summary').innerHTML = html;
+    el.innerHTML = html;
   }
 
   // ========== CRUD ==========
