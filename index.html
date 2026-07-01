@@ -146,6 +146,13 @@
         </select>
         <input type="text" id="compare-search" class="filter-input" placeholder="搜索物品名称...">
       </div>
+      <div class="compare-total-bar" id="compare-total-bar" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <span style="font-weight:600;">已选 <strong id="compare-checked-count">0</strong> 件商品</span>
+          <span style="font-size:1.1rem;font-weight:700;color:var(--primary);">合计：<span id="compare-checked-total">¥0.00</span></span>
+          <span style="font-size:0.8rem;color:var(--text-secondary);" id="compare-checked-detail"></span>
+        </div>
+      </div>
       <div class="compare-grid" id="compare-grid"></div>
     </section>
 

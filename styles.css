@@ -365,3 +365,13 @@ body {
   outline: none;
   box-shadow: 0 0 0 4px rgba(79,110,247,0.15);
 }
+
+/* ========== Compare Total Bar ========== */
+.compare-total-bar {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  border: 2px solid var(--success);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  margin-bottom: 16px;
+  animation: fadeIn 0.3s ease;
+}

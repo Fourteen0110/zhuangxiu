@@ -35,14 +35,17 @@ const CompareModule = (() => {
     grid.innerHTML = items.map(item => {
       const shops = item.shops || [];
       const prices = shops.map(s => Number(s.price)).filter(p => p > 0);
-      const minPrice = prices.length > 1 ? Math.min(...prices) : 0;
+      const minPrice = prices.length > 1 ? Math.min(...prices) : (prices.length === 1 ? prices[0] : 0);
       const maxPrice = prices.length > 1 ? Math.max(...prices) : 0;
       const saving = maxPrice - minPrice;
 
       return `
-        <div class="compare-card">
+        <div class="compare-card" data-compare-id="${item.id}">
           <div class="compare-card-header">
-            <h3>${item.name}</h3>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" class="compare-checkbox" data-id="${item.id}" data-min-price="${minPrice}" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;">
+              <h3>${item.name}</h3>
+            </label>
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
               <span style="font-size:0.78rem;color:var(--text-secondary);">${item.room||''}</span>
               ${item.ordered ? '<span class="badge badge-ordered">已下单</span>' : '<span class="badge badge-pending">比价中</span>'}
@@ -480,7 +483,42 @@ const CompareModule = (() => {
       if (e.key === 'Enter') document.getElementById('btn-quick-compare').click();
     });
 
+    // 复选框变化 → 更新合计
+    document.getElementById('compare-grid').addEventListener('change', (e) => {
+      if (e.target.classList.contains('compare-checkbox')) {
+        updateCheckedTotal();
+      }
+    });
+
     render();
   }
+
+  // ========== 勾选合计 ==========
+  function updateCheckedTotal() {
+    const checkboxes = document.querySelectorAll('.compare-checkbox:checked');
+    let totalMin = 0;
+    let totalMax = 0;
+    const names = [];
+    checkboxes.forEach(cb => {
+      const minP = parseFloat(cb.dataset.minPrice) || 0;
+      totalMin += minP;
+      names.push(cb.closest('.compare-card').querySelector('h3').textContent);
+    });
+
+    const bar = document.getElementById('compare-total-bar');
+    const countEl = document.getElementById('compare-checked-count');
+    const totalEl = document.getElementById('compare-checked-total');
+    const detailEl = document.getElementById('compare-checked-detail');
+
+    if (checkboxes.length === 0) {
+      bar.style.display = 'none';
+    } else {
+      bar.style.display = 'block';
+      countEl.textContent = checkboxes.length;
+      totalEl.textContent = App.formatMoney(totalMin);
+      detailEl.textContent = names.length <= 3 ? names.join(' + ') : names.slice(0,3).join(' + ') + ` ...共${names.length}件`;
+    }
+  }
+
   return { init, render };
 })();
