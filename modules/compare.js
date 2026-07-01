@@ -54,12 +54,12 @@ const CompareModule = (() => {
               const isBest = Number(s.price) === minPrice && minPrice > 0 && shops.length > 1;
               return `
                 <div class="compare-row ${isBest ? 'best-price' : ''}" data-action="edit-shop" data-compare-id="${item.id}" data-shop-idx="${i}" style="cursor:pointer;" title="点击编辑此商家信息">
-                  <input type="checkbox" class="compare-checkbox" data-id="${item.id}" data-shop-idx="${i}" data-shop-name="${(s.name||'').replace(/"/g,'&quot;')}" data-price="${s.price||0}" style="width:16px;height:16px;accent-color:var(--primary);flex-shrink:0;position:relative;z-index:2;" onclick="event.stopPropagation();">
+                  <input type="checkbox" class="compare-checkbox" data-id="${item.id}" data-shop-idx="${i}" data-shop-name="${(s.name||'').replace(/"/g,'&quot;')}" data-price="${s.price||0}" style="width:16px;height:16px;accent-color:var(--primary);flex-shrink:0;">
                   <span class="shop-name">${isBest ? '🏆 ' : ''}${s.name || '商家'+(i+1)}</span>
                   <span class="shop-price" style="${isBest?'font-size:1rem;':''}">${s.price ? App.formatMoney(s.price) : '<span style="color:#ccc;">待填</span>'}</span>
-                  ${s.link ? `<a class="shop-link" href="${s.link}" target="_blank" onclick="event.stopPropagation()" title="打开商品链接">🔗</a>` : ''}
+                  ${s.link ? `<a class="shop-link" href="${s.link}" target="_blank" title="打开商品链接">🔗</a>` : ''}
                   <span class="shop-note-inline" style="font-size:0.72rem;color:var(--text-secondary);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.note || ''}</span>
-                  <button class="btn btn-xs btn-del" data-action="del-shop" data-compare-id="${item.id}" data-shop-idx="${i}" title="删除此商家" style="position:relative;z-index:2;" onclick="event.stopPropagation();">×</button>
+                  <button class="btn btn-xs btn-del" data-action="del-shop" data-compare-id="${item.id}" data-shop-idx="${i}" title="删除此商家">×</button>
                 </div>
               `;
             }).join('')}
@@ -473,15 +473,23 @@ const CompareModule = (() => {
     document.getElementById('compare-search').addEventListener('input', render);
 
     document.getElementById('compare-grid').addEventListener('click', e => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      const action = btn.dataset.action, id = btn.dataset.compareId || btn.dataset.id;
-      if (action === 'add-shop') showAddShop(id);
-      else if (action === 'del-shop') { e.stopPropagation(); deleteShop(btn.dataset.compareId, parseInt(btn.dataset.shopIdx)); }
-      else if (action === 'edit-compare') { const item = getItems().find(i => i.id === id); if (item) showEditName(item); }
-      else if (action === 'order-compare') markOrdered(id);
-      else if (action === 'delete-compare') deleteItem(id);
-      else if (action === 'edit-shop') { e.stopPropagation(); editShopFull(btn.dataset.compareId, parseInt(btn.dataset.shopIdx)); }
+      // 忽略复选框本身的点击
+      if (e.target.classList.contains('compare-checkbox')) return;
+
+      // 找最近的带 data-action 的元素（button 或 div）
+      const el = e.target.closest('[data-action]');
+      if (!el) return;
+
+      const action = el.dataset.action;
+      const compareId = el.dataset.compareId || el.dataset.id;
+      const shopIdx = parseInt(el.dataset.shopIdx);
+
+      if (action === 'add-shop') showAddShop(compareId);
+      else if (action === 'del-shop') deleteShop(compareId, shopIdx);
+      else if (action === 'edit-compare') { const item = getItems().find(i => i.id === compareId); if (item) showEditName(item); }
+      else if (action === 'order-compare') markOrdered(compareId);
+      else if (action === 'delete-compare') deleteItem(compareId);
+      else if (action === 'edit-shop') editShopFull(compareId, shopIdx);
     });
 
     // ========== 一键全网比价（输入型号自动搜索） ==========
