@@ -53,13 +53,13 @@ const CompareModule = (() => {
             ${shops.map((s, i) => {
               const isBest = Number(s.price) === minPrice && minPrice > 0 && shops.length > 1;
               return `
-                <div class="compare-row ${isBest ? 'best-price' : ''}">
-                  <input type="checkbox" class="compare-checkbox" data-id="${item.id}" data-shop-idx="${i}" data-shop-name="${(s.name||'').replace(/"/g,'&quot;')}" data-price="${s.price||0}" style="width:16px;height:16px;accent-color:var(--primary);flex-shrink:0;">
-                  <span class="shop-name" style="cursor:pointer;" data-action="edit-shop-name" data-compare-id="${item.id}" data-shop-idx="${i}" title="点击编辑商家名">${isBest ? '🏆 ' : ''}${s.name || '商家'+(i+1)}</span>
-                  <span class="shop-price" style="cursor:pointer;${isBest?'font-size:1rem;':''}" data-action="edit-shop-price" data-compare-id="${item.id}" data-shop-idx="${i}" title="点击编辑价格">${s.price ? App.formatMoney(s.price) : '<span style="color:#ccc;">点击填价</span>'}</span>
+                <div class="compare-row ${isBest ? 'best-price' : ''}" data-action="edit-shop" data-compare-id="${item.id}" data-shop-idx="${i}" style="cursor:pointer;" title="点击编辑此商家信息">
+                  <input type="checkbox" class="compare-checkbox" data-id="${item.id}" data-shop-idx="${i}" data-shop-name="${(s.name||'').replace(/"/g,'&quot;')}" data-price="${s.price||0}" style="width:16px;height:16px;accent-color:var(--primary);flex-shrink:0;position:relative;z-index:2;" onclick="event.stopPropagation();">
+                  <span class="shop-name">${isBest ? '🏆 ' : ''}${s.name || '商家'+(i+1)}</span>
+                  <span class="shop-price" style="${isBest?'font-size:1rem;':''}">${s.price ? App.formatMoney(s.price) : '<span style="color:#ccc;">待填</span>'}</span>
                   ${s.link ? `<a class="shop-link" href="${s.link}" target="_blank" onclick="event.stopPropagation()" title="打开商品链接">🔗</a>` : ''}
-                  <span class="shop-note-inline" style="font-size:0.72rem;color:var(--text-secondary);cursor:pointer;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-action="edit-shop-note" data-compare-id="${item.id}" data-shop-idx="${i}" title="点击编辑备注">${s.note || '+备注'}</span>
-                  <button class="btn btn-xs btn-del" data-action="del-shop" data-compare-id="${item.id}" data-shop-idx="${i}" title="删除此商家">×</button>
+                  <span class="shop-note-inline" style="font-size:0.72rem;color:var(--text-secondary);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.note || ''}</span>
+                  <button class="btn btn-xs btn-del" data-action="del-shop" data-compare-id="${item.id}" data-shop-idx="${i}" title="删除此商家" style="position:relative;z-index:2;" onclick="event.stopPropagation();">×</button>
                 </div>
               `;
             }).join('')}
@@ -344,40 +344,31 @@ const CompareModule = (() => {
     });
   }
 
-  // ========== 行内编辑商家信息 ==========
-  function editShopField(compareId, shopIdx, field) {
+  // ========== 点击商家行统一编辑 ==========
+  function editShopFull(compareId, shopIdx) {
     const items = getItems();
     const item = items.find(i => i.id === compareId);
     if (!item || !item.shops[shopIdx]) return;
     const shop = item.shops[shopIdx];
 
-    const labels = { name: '商家名称', price: '价格 (元)', note: '备注' };
-    const types = { name: 'text', price: 'number', note: 'text' };
-    const values = { name: shop.name || '', price: shop.price || '', note: shop.note || '' };
-
-    App.showModal(`编辑 ${labels[field]}`, `
-      <div class="form-group">
-        <label>${labels[field]}</label>
-        <input type="${types[field]}" id="es-value" value="${values[field]}" ${field==='price'?'step=0.01 min=0':''} placeholder="${field==='price'?'0.00':''}" autofocus>
+    App.showModal(`✏️ 编辑商家报价`, `
+      <div class="form-row">
+        <div class="form-group"><label>商家/平台</label><input type="text" id="ef-name" value="${shop.name||''}" placeholder="京东/淘宝/拼多多"></div>
+        <div class="form-group"><label>价格 (元)</label><input type="number" id="ef-price" step="0.01" min="0" value="${shop.price||''}" placeholder="0.00"></div>
       </div>
-      ${field === 'name' ? `<div class="form-group"><label>链接</label><input type="url" id="es-link" value="${shop.link||''}" placeholder="https://..."></div>` : ''}
+      <div class="form-group"><label>商品链接</label><input type="url" id="ef-link" value="${shop.link||''}" placeholder="https://..."></div>
+      <div class="form-group"><label>备注</label><input type="text" id="ef-note" value="${shop.note||''}" placeholder="包邮/免安装/赠品..."></div>
     `, `
-      <button class="btn btn-outline" id="es-cancel">取消</button>
-      <button class="btn btn-primary" id="es-save">保存</button>
+      <button class="btn btn-outline" id="ef-cancel">取消</button>
+      <button class="btn btn-primary" id="ef-save">保存</button>
     `);
 
-    document.getElementById('es-cancel').addEventListener('click', App.hideModal);
-    document.getElementById('es-save').addEventListener('click', () => {
-      const val = document.getElementById('es-value').value.trim();
-      if (field === 'price') {
-        shop.price = parseFloat(val) || null;
-      } else if (field === 'name') {
-        shop.name = val || '商家'+(shopIdx+1);
-        const linkEl = document.getElementById('es-link');
-        if (linkEl) shop.link = linkEl.value.trim();
-      } else {
-        shop.note = val;
-      }
+    document.getElementById('ef-cancel').addEventListener('click', App.hideModal);
+    document.getElementById('ef-save').addEventListener('click', () => {
+      shop.name = document.getElementById('ef-name').value.trim() || '商家'+(shopIdx+1);
+      shop.price = parseFloat(document.getElementById('ef-price').value) || null;
+      shop.link = document.getElementById('ef-link').value.trim();
+      shop.note = document.getElementById('ef-note').value.trim();
       saveItems(items);
       App.hideModal();
       App.showToast('已更新', 'success');
@@ -490,9 +481,7 @@ const CompareModule = (() => {
       else if (action === 'edit-compare') { const item = getItems().find(i => i.id === id); if (item) showEditName(item); }
       else if (action === 'order-compare') markOrdered(id);
       else if (action === 'delete-compare') deleteItem(id);
-      else if (action === 'edit-shop-name') { e.stopPropagation(); editShopField(btn.dataset.compareId, parseInt(btn.dataset.shopIdx), 'name'); }
-      else if (action === 'edit-shop-price') { e.stopPropagation(); editShopField(btn.dataset.compareId, parseInt(btn.dataset.shopIdx), 'price'); }
-      else if (action === 'edit-shop-note') { e.stopPropagation(); editShopField(btn.dataset.compareId, parseInt(btn.dataset.shopIdx), 'note'); }
+      else if (action === 'edit-shop') { e.stopPropagation(); editShopFull(btn.dataset.compareId, parseInt(btn.dataset.shopIdx)); }
     });
 
     // ========== 一键全网比价（输入型号自动搜索） ==========
