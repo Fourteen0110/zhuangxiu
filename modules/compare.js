@@ -42,10 +42,7 @@ const CompareModule = (() => {
       return `
         <div class="compare-card" data-compare-id="${item.id}">
           <div class="compare-card-header">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-              <input type="checkbox" class="compare-checkbox" data-id="${item.id}" data-min-price="${minPrice}" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;">
-              <h3>${item.name}</h3>
-            </label>
+            <h3>${item.name}</h3>
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
               <span style="font-size:0.78rem;color:var(--text-secondary);">${item.room||''}</span>
               ${item.ordered ? '<span class="badge badge-ordered">已下单</span>' : '<span class="badge badge-pending">比价中</span>'}
@@ -57,10 +54,11 @@ const CompareModule = (() => {
               const isBest = Number(s.price) === minPrice && minPrice > 0 && shops.length > 1;
               return `
                 <div class="compare-row ${isBest ? 'best-price' : ''}">
+                  <input type="checkbox" class="compare-checkbox" data-id="${item.id}" data-shop-idx="${i}" data-shop-name="${(s.name||'').replace(/"/g,'&quot;')}" data-price="${s.price||0}" style="width:16px;height:16px;accent-color:var(--primary);flex-shrink:0;">
                   <span class="shop-name" style="cursor:pointer;" data-action="edit-shop-name" data-compare-id="${item.id}" data-shop-idx="${i}" title="点击编辑商家名">${isBest ? '🏆 ' : ''}${s.name || '商家'+(i+1)}</span>
                   <span class="shop-price" style="cursor:pointer;${isBest?'font-size:1rem;':''}" data-action="edit-shop-price" data-compare-id="${item.id}" data-shop-idx="${i}" title="点击编辑价格">${s.price ? App.formatMoney(s.price) : '<span style="color:#ccc;">点击填价</span>'}</span>
                   ${s.link ? `<a class="shop-link" href="${s.link}" target="_blank" onclick="event.stopPropagation()" title="打开商品链接">🔗</a>` : ''}
-                  ${s.note ? `<span style="font-size:0.72rem;color:var(--text-secondary);cursor:pointer;" data-action="edit-shop-note" data-compare-id="${item.id}" data-shop-idx="${i}" title="点击编辑备注">${s.note}</span>` : ''}
+                  <span class="shop-note-inline" style="font-size:0.72rem;color:var(--text-secondary);cursor:pointer;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-action="edit-shop-note" data-compare-id="${item.id}" data-shop-idx="${i}" title="点击编辑备注">${s.note || '+备注'}</span>
                   <button class="btn btn-xs btn-del" data-action="del-shop" data-compare-id="${item.id}" data-shop-idx="${i}" title="删除此商家">×</button>
                 </div>
               `;
@@ -538,16 +536,17 @@ const CompareModule = (() => {
     render();
   }
 
-  // ========== 勾选合计 ==========
+  // ========== 勾选合计（按商家行） ==========
   function updateCheckedTotal() {
     const checkboxes = document.querySelectorAll('.compare-checkbox:checked');
-    let totalMin = 0;
-    let totalMax = 0;
+    let total = 0;
     const names = [];
     checkboxes.forEach(cb => {
-      const minP = parseFloat(cb.dataset.minPrice) || 0;
-      totalMin += minP;
-      names.push(cb.closest('.compare-card').querySelector('h3').textContent);
+      const price = parseFloat(cb.dataset.price) || 0;
+      total += price;
+      const shopName = cb.dataset.shopName || '';
+      const cardName = cb.closest('.compare-card').querySelector('h3').textContent;
+      names.push(shopName ? `${cardName} @ ${shopName}` : cardName);
     });
 
     const bar = document.getElementById('compare-total-bar');
@@ -560,8 +559,8 @@ const CompareModule = (() => {
     } else {
       bar.style.display = 'block';
       countEl.textContent = checkboxes.length;
-      totalEl.textContent = App.formatMoney(totalMin);
-      detailEl.textContent = names.length <= 3 ? names.join(' + ') : names.slice(0,3).join(' + ') + ` ...共${names.length}件`;
+      totalEl.textContent = App.formatMoney(total);
+      detailEl.textContent = names.length <= 3 ? names.join(' + ') : names.slice(0,3).join(' + ') + ` ...共${names.length}项`;
     }
   }
 
